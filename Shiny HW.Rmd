@@ -1,0 +1,374 @@
+---
+title: "Shiny HW"
+author: "Beiming Yu"
+output: pdf_document
+---
+1. The difference between Hadley 1 and Hadley 2
+```{r}
+library(shiny)
+shinyApp(ui = ui, server = server)
+big_mac_data <- read.csv("big_mac.csv")
+
+ui <- fluidPage(
+  titlePanel("Big Mac Dataset Viewer"),
+  sidebarLayout(
+    sidebarPanel(
+      helpText("This app displays the summary and a preview of the Big Mac dataset.")
+    ),
+    mainPanel(
+      h3("Summary"),
+      verbatimTextOutput("summary"),
+      h3("Table"),
+      tableOutput("table")
+    )
+  )
+)
+
+server <- function(input, output, session) {
+  output$summary <- renderPrint({
+    time_taken <- system.time({
+      summary_output <- summary(big_mac_data)
+    })
+    cat("Running time for summary:\n")
+    print(time_taken)
+    cat("\nSummary:\n")
+    summary_output
+  })
+  
+  output$table <- renderTable({
+    time_taken <- system.time({
+      table_output <- str(big_mac_data)
+    })
+    cat("Running time for table:\n")
+    print(time_taken)
+    table_output
+  })
+}
+```
+Do the same thing to Hadley 2
+```{r}
+server <- function(input, output, session) {
+  output$summary <- renderPrint({
+    time_taken <- system.time({
+      summary_output <- summary(big_mac_data)
+    })
+    cat("Running time for summary:\n")
+    print(time_taken)
+    cat("\nSummary:\n")
+    summary_output
+  })
+  
+  output$table <- renderTable({
+    time_taken <- system.time({
+      table_output <- head(big_mac_data, 1000)
+    })
+    cat("Running time for table:\n")
+    print(time_taken)
+    table_output
+  })
+}
+
+ui <- fluidPage(
+  titlePanel("Big Mac Data Viewer"),
+  sidebarLayout(
+    sidebarPanel(
+      h3("Viewing Big Mac Data")
+    ),
+    mainPanel(
+      h3("Summary"),
+      verbatimTextOutput("summary"),
+      h3("Big mac data"),
+      tableOutput("table")
+    )
+  )
+)
+shinyApp(ui = ui, server = server)
+```
+The Hadley2 is generally better and can be faster  due to its reactive programming approach which ensures that outputs automatically update whenever their inputs change, without redundant recalculations.The running time based on the data also shows the increase in efficiency.
+
+2. 
+1) Which of textOutput() and verbatimTextOutput() should each of the following render functions be paired with?
+
+renderPrint(summary(mtcars))
+
+renderText("Good morning!")
+
+renderPrint(t.test(1:5, 2:6))
+
+renderText(str(lm(mpg ~ wt, data = mtcars)))
+
+Answer: textOuput() paired with renderText("Good morning!") and renderText(str(lm(mpg ~ wt, data = mtcars))), since both of thme output plain text.
+verbatimTextOutput() paired with other two, since it produces fixed-width, formatted text output.
+
+3. (2)Plot the five random number scatter plot.
+```{r}
+ui <- fluidPage(
+  plotOutput("plot", width = "700px", height = "300px"),
+  tags$div(id = "plot-alt-text", 
+           "Scatterplot of five random numbers showing a simple sequence.",
+           style = "position: absolute; left: -9999px;")
+)
+
+
+server <- function(input, output, session) {
+  output$plot <- renderPlot({
+    plot(1:5, 
+         main = "Scatterplot of Five Numbers", 
+         xlab = "Index", 
+         ylab = "Value", 
+         pch = 16, 
+         col = "blue")
+  }, res = 96)
+}
+
+shinyApp(ui, server)
+```
+4.
+(3)Update the options in the call to renderDataTable() below so that the data is displayed, but all other controls are suppressed
+```{r}
+ui <- fluidPage(
+  dataTableOutput("table")
+)
+
+server <- function(input, output, session) {
+  output$table <- renderDataTable(
+    mtcars,
+    options = list(
+      dom = 't',
+      ordering = FALSE,
+      pageLength = nrow(mtcars)
+    )
+  )
+}
+
+shinyApp(ui, server)
+```
+5.
+(4)Alternatively, read up on reactable, and convert the above app to use it instead.
+```{r}
+library(reactable)
+
+ui <- fluidPage(
+  reactableOutput("table")
+)
+
+server <- function(input, output, session) {
+  output$table <- renderReactable(
+    reactable(
+      mtcars,
+      searchable = FALSE,
+      sortable = FALSE,   # Disable sorting
+      pagination = FALSE  # Disable pagination
+    )
+  )
+}
+
+shinyApp(ui, server)
+```
+
+6:
+(1):Fix error
+```{r}
+ui <- fluidPage(
+  textInput("name", "What's your name?"),
+  textOutput("greeting")
+)
+#input$greeting was incorrectly trying to assign a value to input, which is read-only. RenderText placement: The renderText needs to be assigned to output$greeting.
+server1 <- function(input, output, session) {
+  output$greeting <- renderText({ 
+    paste0("Hello ", input$name)
+  })
+}
+#The reactive output greeting wasn't assigned to output$greeting
+server2 <- function(input, output, session) {
+  output$greeting <- renderText({
+    paste0("Hello ", input$name)
+  })
+}
+#There was a typo in greting. It should match greeting as defined in the ui.
+server3 <- function(input, output, session) {
+  output$greeting <- renderText({ 
+    paste0("Hello ", input$name)
+  })
+}
+```
+
+7: Draw a reactive graph
+Server 1:
+
+input$a ----+
+             \
+              > c() ----+
+input$b ----+           \
+                          > e() ----> output$f
+input$d -----------------/
+
+
+Server2:
+input$x1 ----+
+             \
+input$x2 ----+----> x() ----+
+             /               \
+input$x3 ----                \
+                              > output$z
+input$y1 ----+               /
+             \              /
+input$y2 ----+----> y() ---/
+
+Server3:
+
+input$a ----> a() ----+
+                      \
+                       > b() ----+
+input$b --------------/          \
+                                  > c() ----> d()
+input$c -------------------------/
+input$d ------------------------/
+
+8:(3)Why wrong?
+
+Since the names are redefined as reactive expressions, we cannot use the base R functions range() or var() in the same context.
+When we use reactive expressions range and var, we are overwriting these base functions in the current environment. This can lead to errors when other parts of your code or even R's internal functions attempt to use range() or var() as originally intended.
+
+
+
+
+```{r}
+dir.create("neiss")
+#> Warning in dir.create("neiss"): 'neiss' already exists
+download <- function(name) {
+  url <- "https://raw.github.com/hadley/mastering-shiny/main/neiss/"
+  download.file(paste0(url, name), paste0("neiss/", name), quiet = TRUE)
+}
+download("injuries.tsv.gz")
+download("population.tsv")
+download("products.tsv")
+# Load the data (update file paths as needed)
+injuries <- vroom::vroom("neiss/injuries.tsv.gz")
+population <- vroom::vroom("neiss/population.tsv")
+products <- vroom::vroom("neiss/products.tsv")
+```
+9: Add the graph:
+Prototype:
+input$code ----+
+               \
+                > selected() ----+----> output$diag
+                                 |
+                                 +----> output$body_part
+                                 |
+                                 +----> output$location
+                                 |
+                                 +----> summary() ----> output$age_sex
+
+Rate v.s. Count
+input$code ----+
+               \
+                > selected() ----+----> output$diag
+                                 |
+                                 +----> output$body_part
+                                 |
+                                 +----> output$location
+                                 |
+                                 +----> summary() ----+
+                                                      |
+input$y --------------------------> summary() --------+
+                                                      |
+                                                      +----> output$age_sex
+                                                      
+Narrative：
+input$code ----+
+               \
+                > selected() ----+----> output$diag
+                                 |
+                                 +----> output$body_part
+                                 |
+                                 +----> output$location
+                                 |
+                                 +----> summary() ----+
+                                                      |
+input$y --------------------------> summary() --------+
+                                                      |
+                                                      +----> output$age_sex
+                                                      |
+input$story ----------------------> narrative() ------+
+                                                      |
+                                 +--------------------> output$narrative
+
+
+10: (2)The differences:
+fct_infreq() reorders the factor levels of a categorical variable in descending order of frequency.
+fct_lump() generates frequent factor levels into a single "Other" category based on a threshold.
+if we run ct_infreq() first the output respects the frequency order, and the rare levels are lumped after reordering, and other appears as the least frequent level at the end.
+
+11: (3) Add an input control
+```{r}
+library(shiny)
+library(vroom)
+
+injuries <- vroom::vroom("neiss/injuries.tsv.gz")
+
+ui <- fluidPage(
+  titlePanel("Injuries Data Explorer"),
+  sidebarLayout(
+    sidebarPanel(
+      sliderInput("rows", "Number of rows to display:", 
+                  min = 5, max = 50, value = 10, step = 5)
+    ),
+    mainPanel(
+      tableOutput("summary_table")
+    )
+  )
+)
+
+server <- function(input, output, session) {
+  
+  output$summary_table <- renderTable({
+    head(injuries, n = input$rows)
+  })
+}
+
+# Run the App
+shinyApp(ui = ui, server = server)
+
+```
+12:Provide a way to step through every narrative systematically with forward and backward buttons.
+```{r}
+ui <- fluidPage(
+  titlePanel("Injuries Narratives Explorer"),
+  sidebarLayout(
+    sidebarPanel(
+      actionButton("prev", "Previous"),
+      actionButton("next", "Next"),
+      br(),
+      verbatimTextOutput("narrative_index")
+    ),
+    mainPanel(
+      verbatimTextOutput("narrative")
+    )
+  )
+)
+
+server <- function(input, output, session) {
+  current_index <- reactiveVal(1)
+  
+  
+  observeEvent(input$prev, {
+    if (current_index() > 1) {
+      current_index(current_index() - 1)
+    }
+  })
+
+  output$narrative <- renderText({
+    index <- current_index()
+    paste("Narrative", index, ":", injuries$narrative[index])
+  })
+  
+  output$narrative_index <- renderText({
+    paste("Current Narrative Index:", current_index(), "of", nrow(injuries))
+  })
+}
+
+shinyApp(ui = ui, server = server)
+
+```
+
